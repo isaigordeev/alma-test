@@ -1,0 +1,19 @@
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+}
+
+#transcript {
+    border: 1px solid #ccc;
+    padding: 10px;
+    height: 300px;
+    overflow-y: scroll;
+}
+
+#transcript p.recognized {
+    color: blue;
+}
+
+#transcript p.response {
+    color: green;
+}

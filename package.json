@@ -1,0 +1,29 @@
+{
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.2",
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "zod": "^3.25.76"
+  },
+  "name": "alma-test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "mcp-server-ts-http.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "ts-node mcp-server-ts-http.ts",
+    "dev": "nodemon --watch 'mcp-server-ts-http.ts' --exec 'ts-node' mcp-server-ts-http.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.4",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
