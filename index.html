@@ -17,6 +17,7 @@
             overflow-y: scroll;
         }
     </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
@@ -24,7 +25,13 @@
     <button id="startBtn">Start</button>
     <div id="transcript"></div>
 
-    <script>
+    <script type="module">
+        import { WebRTCTransport } from "./dist/rtc_server.js";
+        import {getServer} from "./dist/mcp_instance.js"
+
+        console.log(getServer);        // ✅ should log function
+        console.log(WebRTCTransport); 
+
         const startBtn = document.getElementById("startBtn");
         const transcriptDiv = document.getElementById("transcript");
         let pc, dc, audioContext, workletNode;
@@ -39,7 +46,18 @@
 
             dc = pc.createDataChannel("audio");
             // Assistant text ← backend
-            const textChannel = pc.createDataChannel("text-out");
+            const recognizedtextChannel = pc.createDataChannel("recognized-text-out");
+            const responsetextChannel = pc.createDataChannel("response-text-out");
+
+            const textChannel = pc.createDataChannel("text");
+
+            mcp_read = pc.createDataChannel("mcp_read");
+            mcp_write = pc.createDataChannel("mcp_write");
+
+            mcp_read.onopen = () => console.log("[LOG] MCP read channel open");
+
+            mcp_read.onmessage = (e) => console.log("[MCP_READ]", e.data);
+            mcp_write.onmessage = (e) => console.log("[MCP_WRITE]", e.data);
 
             // Synthesized audio ← backend
             const audioChannel = pc.createDataChannel("audio-out");
@@ -49,8 +67,84 @@
             dc.onerror = (err) => console.error("[ERROR] Data channel error:", err);
 
             textChannel.onmessage = (event) => {
-                console.log("[Assistant Text]", event.data);
+                try {
+                    const msg = JSON.parse(event.data); // Unpack the JSON string
+
+                    console.log("[TextChannel] Received message:", msg);
+
+                    // Check if this is a context request
+                    if (msg.type === "context" && msg.action === "request") {
+                        console.log("[TextChannel] Backend requested context");
+
+                        // Example payload (your app’s current context)
+                        const currentContext = {
+                            current_page: "dashboard",
+                            page_context: "user-overview",
+                            page_display: "main",
+                            max_steps: 4,
+                            current_step: 1,
+                        };
+
+                        // Create a response message
+                        const response = {
+                            type: "context",
+                            action: "update",
+                            payload: currentContext,
+                        };
+
+                        // Send it back to the backend
+                        textChannel.send(JSON.stringify(response));
+                        console.log("[TextChannel] Sent context update:", response);
+                    }
+
+                } catch (err) {
+                    console.error("[TextChannel] Invalid JSON message:", err, event.data);
+                }}
+
+            // Recognized user speech
+            recognizedtextChannel.onmessage = (event) => {
+                const p = document.createElement("p");
+                p.textContent = event.data;
+                p.className = "recognized"; // optional CSS class
+                transcriptDiv.appendChild(p);
+
+                transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
             };
+            let currentResponseP = null;
+
+            recognizedtextChannel.onmessage = (event) => {
+                // Create a new <p> for recognized user speech
+                const p = document.createElement("p");
+                p.className = "recognized";
+                p.textContent = event.data;
+                transcriptDiv.appendChild(p);
+
+                // Reset response <p> for assistant
+                currentResponseP = document.createElement("p");
+                currentResponseP.className = "response";
+                transcriptDiv.appendChild(currentResponseP);
+
+                // Auto-scroll
+                transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+            };
+
+            responsetextChannel.onmessage = (event) => {
+                const chunk = event.data;
+
+                if (!currentResponseP) {
+                    // Safety: create response <p> if missing
+                    currentResponseP = document.createElement("p");
+                    currentResponseP.className = "response";
+                    transcriptDiv.appendChild(currentResponseP);
+                }
+
+                // Append the new chunk to the current response <p>
+                currentResponseP.textContent += chunk;
+
+                // Auto-scroll
+                transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+            };
+
 
             // Create AudioContext and add worklet
             audioContext = new AudioContext();
@@ -73,6 +167,8 @@
                 }
             };
 
+
+
             // WebRTC signaling
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
@@ -87,6 +183,20 @@
             const answer = await res.json();
             await pc.setRemoteDescription(answer);
             console.log("[LOG] Remote SDP answer set. Streaming should now be active.");
+
+
+            await Promise.all([
+                new Promise(res => mcp_read.onopen = res),
+                new Promise(res => mcp_write.onopen = res),
+            ]);
+
+            const client = getServer();
+            console.log("Connected to client ", client);
+            const transport = new WebRTCTransport(mcp_read, mcp_write);
+            console.log(getServer); // should log function
+            console.log(WebRTCTransport); // should log class
+            await client.connect(transport);
+            console.log("Connected to backend via WebRTCTransport", client);
 
             transcriptDiv.innerHTML += "<p>Streaming started...</p>";
         };

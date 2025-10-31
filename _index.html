@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Cars Live Transcription</title>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+        }
+
+        #transcript {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 300px;
+            overflow-y: scroll;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Audio Transcription</h1>
+    <button id="startBtn">Start</button>
+    <div id="transcript"></div>
+
+    <script>
+        const startBtn = document.getElementById("startBtn");
+        const transcriptDiv = document.getElementById("transcript");
+        let pc, dc, audioContext, workletNode;
+
+        startBtn.onclick = async () => {
+            console.log("[LOG] Starting microphone capture...");
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Create RTCPeerConnection and DataChannel
+            pc = new RTCPeerConnection();
+            console.log("[LOG] RTCPeerConnection created.");
+
+            dc = pc.createDataChannel("audio");
+            // Assistant text ← backend
+            const textChannel = pc.createDataChannel("text-out");
+
+            // Synthesized audio ← backend
+            const audioChannel = pc.createDataChannel("audio-out");
+            dc.binaryType = "arraybuffer";
+            dc.onopen = () => console.log("[LOG] Data channel open");
+            dc.onclose = () => console.log("[LOG] Data channel closed");
+            dc.onerror = (err) => console.error("[ERROR] Data channel error:", err);
+
+            // textChannel.onmessage = (event) => {
+            //     console.log("[Assistant Text]", event.data);
+            // };
+
+            // Create AudioContext and add worklet
+            audioContext = new AudioContext();
+            await audioContext.audioWorklet.addModule("processor.js");
+            const source = audioContext.createMediaStreamSource(stream);
+
+            workletNode = new AudioWorkletNode(audioContext, "audio-processor");
+            source.connect(workletNode);
+            workletNode.connect(audioContext.destination);
+
+            console.log("[LOG] AudioContext and AudioWorkletNode initialized.");
+            console.log("Sample rate:", audioContext.sampleRate);
+
+            // Receive audio buffers from the worklet
+            workletNode.port.onmessage = (event) => {
+                const buffer = event.data;
+                if (dc.readyState === "open") {
+                    dc.send(buffer);
+                    // console.log(`[LOG] Sent float32 chunk: ${buffer.byteLength} bytes`);
+                }
+            };
+
+            // WebRTC signaling
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            console.log("[LOG] Local SDP offer set.");
+
+            const res = await fetch("http://localhost:8080/offer", {
+                method: "POST",
+                body: JSON.stringify({ sdp: offer.sdp, type: offer.type }),
+                headers: { "Content-Type": "application/json" }
+            });
+
+            const answer = await res.json();
+            await pc.setRemoteDescription(answer);
+            console.log("[LOG] Remote SDP answer set. Streaming should now be active.");
+
+            transcriptDiv.innerHTML += "<p>Streaming started...</p>";
+        };
+    </script>
+</body>
+
+</html>

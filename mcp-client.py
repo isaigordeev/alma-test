@@ -10,10 +10,11 @@ import json
 from groq import AsyncGroq
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, OpenAI
 
 # Initialize OpenAI client
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 async def process_tool_calls(session: ClientSession, tool_calls):
@@ -150,7 +151,7 @@ async def chat_with_tools(
 
 
 async def stream_chat_with_tools(
-    session: ClientSession, user_message: str, model: str = "gpt-4o-mini"
+    session: ClientSession, user_message: str, model: str = "gpt-4.1"
 ):
     """Run a streaming chat completion with tool calling"""
     print(f"\n{'=' * 60}")
@@ -189,7 +190,7 @@ async def stream_chat_with_tools(
     max_iterations = 5
     for iteration in range(max_iterations):
         # Call OpenAI API with streaming
-        stream = await openai_client.chat.completions.create(
+        stream = openai_client.chat.completions.create(
             model=model,
             messages=messages,
             tools=openai_tools,
@@ -201,7 +202,7 @@ async def stream_chat_with_tools(
         full_content = ""
         tool_calls_data = {}
 
-        async for chunk in stream:
+        for chunk in stream:
             delta = chunk.choices[0].delta
 
             # Stream text content
@@ -249,6 +250,7 @@ async def stream_chat_with_tools(
             }
         )
 
+        print("itt", iteration, messages[-1])
         # Check if we need to call tools
         if tool_calls_list:
             print(f"\n🔄 Processing {len(tool_calls_list)} tool call(s)...\n")
@@ -275,7 +277,7 @@ async def stream_chat_with_tools(
             # Add tool results to messages
             messages.extend(tool_results)
 
-            print("\n🤖 AI (streaming): ", end="", flush=True)
+            print(f"\n🤖 final tools msgs {messages}", end="", flush=True)
         else:
             # No more tool calls, we have the final answer
             print()
@@ -308,24 +310,24 @@ async def run_client():
             print("✅ Connected to MCP server\n")
 
             # Example 1: Simple query requiring one tool
-            await chat_with_tools(session, "What's the weather like in Tokyo?")
+            # await chat_with_tools(session, "What's the weather like in Tokyo?")
 
-            # Example 2: Complex query requiring multiple tools
-            await chat_with_tools(
-                session,
-                "What's the weather in New York, what time is it there, and what's 15% of 250?",
-            )
+            # # Example 2: Complex query requiring multiple tools
+            # await chat_with_tools(
+            #     session,
+            #     "What's the weather in New York, what time is it there, and what's 15% of 250?",
+            # )
 
             # Example 3: Streaming response with tools
-            await stream_chat_with_tools(
-                session,
-                "Tell me the weather in London and calculate the sum of 123 + 456 + 789",
-            )
+            # await stream_chat_with_tools(
+            #     session,
+            #     "Tell me the weather in London and calculate the sum of 123 + 456 + 789",
+            # )
 
             # Example 4: Query that needs sequential tool calls
             await stream_chat_with_tools(
                 session,
-                "Compare the weather between San Francisco and Seattle, then calculate which temperature is higher by how many degrees",
+                "Compare the weather between San Francisco and Seattle, then calculate which temperature is higher by how many degrees. Before calling a function write a little message about the function and a little resume at the end.",
             )
 
             print("\n" + "=" * 60)

@@ -58,7 +58,7 @@ async def rtc_client(
         """
         async with read_stream_writer:
             try:
-                raw_text = queue_in.get()
+                raw_text = await queue_in.get()
                 message = types.JSONRPCMessage.model_validate_json(raw_text)
                 session_message = SessionMessage(message)
                 await read_stream_writer.send(session_message)
@@ -77,15 +77,15 @@ async def rtc_client(
                 msg_dict = session_message.message.model_dump(
                     by_alias=True, mode="json", exclude_none=True
                 )
-                await channel_out.send(json.dumps(msg_dict))
+                channel_out.send(json.dumps(msg_dict))
 
-        async with anyio.create_task_group() as tg:
-            # Start reader and writer tasks
-            tg.start_soon(ws_reader)
-            tg.start_soon(ws_writer)
+    async with anyio.create_task_group() as tg:
+        # Start reader and writer tasks
+        tg.start_soon(ws_reader)
+        tg.start_soon(ws_writer)
 
-            # Yield the receive/send streams
-            yield (read_stream, write_stream)
+        # Yield the receive/send streams
+        yield (read_stream, write_stream)
 
-            # Once the caller's 'async with' block exits, we shut down
-            tg.cancel_scope.cancel()
+        # # Once the caller's 'async with' block exits, we shut down
+        # tg.cancel_scope.cancel()

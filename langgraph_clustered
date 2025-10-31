@@ -1,0 +1,90 @@
+// LangGraph Workflow
+digraph {
+	size="12,12"
+	ratio=expand
+	splines=ortho
+	nodesep=0.8
+	ranksep=1.2
+	{
+		rank=source
+		__START__ [color=lightgreen shape=box style=filled]
+	}
+	{
+		rank=sink
+		__END__ [color=lightcoral shape=box style=filled]
+	}
+	subgraph cluster_PLANNER_AGENT {
+		color=lightyellow label=PLANNER style=filled
+		PLANNER_PIPE [label=PLANNER_PIPE]
+		PLANNER_AGENT [label=PLANNER_AGENT]
+		_ncompl_ [label=ncompl fillcolor=lightgrey style=filled]
+		_hcut_ [label=hcut fillcolor=lightgrey style=filled]
+		_scut_ [label=scut fillcolor=lightgrey style=filled]
+		_int_p_ [label=int_p fillcolor=lightgrey style=filled]
+		_dir_ [label=dir fillcolor=lightgrey style=filled]
+		_ultdir_ [label=ultdir fillcolor=lightgrey style=filled]
+		_nint_p [label=nint_p fillcolor=lightgrey style=filled]
+		lphrase [label=lphrase]
+		accumulate [label=accumulate]
+	}
+	subgraph cluster_pipeline {
+		color=lightgreen label=PIPELINE labelloc=t style=filled
+		MULTIAGENT [label=MULTIAGENT fillcolor=white style=filled]
+		PEER [label=PEER fillcolor=white style=filled]
+		PIPE [label=PIPE fillcolor=white style=filled]
+		AMNGR [label=AMNGR fillcolor=white style=filled]
+		"VOICE CLIENT" [label="VOICE CLIENT" fillcolor=white style=filled]
+		"*MEMORY*" [label="*MEMORY*" fillcolor=lightblue style=filled]
+		ORCHESTRATOR [label=ORCHESTRATOR fillcolor=lightblue style=filled]
+	}
+	subgraph cluster_TTS {
+		TTS [label=TTS fillcolor=white style=filled]
+		"TTS Manager" [label="TTS Manager" fillcolor=lightblue style=filled]
+		Player [label=Player fillcolor=lightblue style=filled]
+	}
+	subgraph cluster_STT {
+		STT [label=STT fillcolor=white style=filled]
+	}
+	__START__ -> PEER [color=red]
+	__START__ -> "VOICE SERVER" [color=red]
+	PEER -> STT [color=red]
+	PEER -> "VOICE CLIENT" [color=red]
+	PEER -> "VOICE SERVER" [color=red]
+	"VOICE CLIENT" -> "VOICE SERVER" [color=red dir=both]
+	ORCHESTRATOR -> "*MEMORY*"
+	MULTIAGENT -> "TTS Manager" [color=red]
+	PIPE -> AMNGR
+	PIPE -> ORCHESTRATOR [color=red]
+	ORCHESTRATOR -> AMNGR [color=red]
+	AMNGR -> MULTIAGENT [color=red]
+	MULTIAGENT -> "VOICE CLIENT" [color=red]
+	PIPE -> PEER [dir=both]
+	PIPE -> STT
+	STT -> PIPE [color=red]
+	PIPE -> "TTS Manager" [dir=both]
+	ORCHESTRATOR -> PLANNER_AGENT [color=red]
+	"TTS Manager" -> TTS [color=red]
+	"TTS Manager" -> Player [dir=both]
+	_nint_p -> lphrase
+	lphrase -> AMNGR
+	_scut_ -> lphrase
+	_hcut_ -> __START__
+	_ncompl_ -> accumulate
+	_int_p_ -> accumulate
+	accumulate -> "*MEMORY*"
+	"*MEMORY*" -> PLANNER_AGENT
+	_ultdir_ -> AMNGR
+	_dir_ -> lphrase
+	lphrase -> "TTS Manager"
+	PLANNER_PIPE -> PLANNER_AGENT
+	PLANNER_AGENT -> _hcut_
+	PLANNER_AGENT -> _scut_
+	PLANNER_AGENT -> _ncompl_
+	PLANNER_AGENT -> _int_p_
+	PLANNER_AGENT -> _dir_
+	PLANNER_AGENT -> _ultdir_
+	PLANNER_AGENT -> _nint_p
+	TTS -> Player
+	Player -> __END__ [color=red]
+	__END__ -> __START__ [color=red]
+}

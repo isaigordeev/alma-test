@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from .rtc_client import rtc_client
+from fastapi import FastAPI, Request
+import uvicorn
+from rtc_client import rtc_client
 
 
 import asyncio
@@ -334,42 +335,65 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+channels = {}  # mutable container
+channel_ready = asyncio.Future()
 
-async def main():
-    if not os.getenv("OPENAI_API_KEY"):
-        logger.error(
-            "❌ OPENAI_API_KEY not set. Use: export OPENAI_API_KEY=your_key_here"
-        )
-        return
 
-    logger.info("=" * 60)
-    logger.info(
-        "🚀 Starting MCP StreamableHTTP Client with OpenAI Integration"
+@app.post("/offer")
+async def offer(request: Request):
+    params = await request.json()
+    offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+
+    pc = RTCPeerConnection()
+    pcs.add(pc)
+    logger.info("[LOG] RTCPeerConnection created.")
+
+    # Queues for communication
+    queue_in: asyncio.Queue = asyncio.Queue()
+
+    # --- Data Channels from Browser ---
+    @pc.on("datachannel")
+    def on_datachannel(channel: RTCDataChannel):
+        logger.info(f"[LOG] Data channel received: {channel.label}")
+
+        if channel.label == "text-out":
+            logger.info("[LOG] Server received mcp_read channel")
+            channel.on("message", lambda msg: queue_in.put_nowait(msg))
+            channels["out"] = channel
+
+            if not channel_ready.done():
+                channel_ready.set_result(True)
+
+    # --- Set Remote Description and Create Answer ---
+    await pc.setRemoteDescription(offer)
+    answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
+    logger.info("[LOG] SDP answer created and set.")
+
+    # --- Initialize MCP Client ---
+    async def run_mcp_client():
+        await channel_ready
+        print(channels)
+        logger.info("[MCP] Initializing MCP session...")
+        async with rtc_client(queue_in, channels["out"]) as (
+            read_stream,
+            write_stream,
+        ):
+            async with ClientSession(read_stream, write_stream) as session:
+                logger.info("[MCP] Wants to connect")
+                await session.initialize()
+                logger.info("[MCP] Connected to MCP server (Session ID:)")
+                await stream_chat_with_tools(
+                    session, "Create a new note in Scribe."
+                )
+
+    asyncio.create_task(run_mcp_client())
+
+    return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
+
+
+if __name__ == "__main__":
+    print("[LOG] Starting FastAPI server on http://0.0.0.0:8080")
+    uvicorn.run(
+        "mcp_custom_client:app", host="0.0.0.0", port=8080, reload=True
     )
-    logger.info("=" * 60)
-
-    async with rtc_client(queue_in, channel_out) as (
-        read_stream,
-        write_stream,
-        get_session_id,
-    ):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            logger.info(
-                f"✅ Connected to MCP server (Session ID: {get_session_id()})"
-            )
-
-            # Run multiple examples
-            # await chat_with_tools(
-            #     session,
-            #     "Create a new chat and tell me what tools are available.",
-            # )
-            # await stream_chat_with_tools(
-            #     session,
-            #     "Select GPT-4o model and explain entropy in simple terms.",
-            # )
-            await stream_chat_with_tools(
-                session, "Can you go to scribe and create a new note please?"
-            )
-
-            logger.info("\n🏁 All sessions complete.\n")
